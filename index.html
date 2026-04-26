@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>iBeer</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiaUJlZXIiLCJzaG9ydF9uYW1lIjoiaUJlZXIiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzAwMDAwMCIsInRoZW1lX2NvbG9yIjoiIzAwMDAwMCJ9">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            display: block;
+        }
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #overlay h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #f5a623;
+            text-shadow: 0 0 20px rgba(245,166,35,0.5);
+        }
+        #overlay p {
+            font-size: 1rem;
+            color: #ccc;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        #startBtn {
+            background: linear-gradient(135deg, #f5a623 0%, #d4891a 100%);
+            border: none;
+            padding: 16px 48px;
+            font-size: 1.2rem;
+            color: #000;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(245,166,35,0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        #startBtn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 10px rgba(245,166,35,0.3);
+        }
+        #permissionBtn {
+            background: transparent;
+            border: 2px solid #f5a623;
+            padding: 12px 32px;
+            font-size: 1rem;
+            color: #f5a623;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 15px;
+            display: none;
+        }
+        .hidden { display: none !important; }
+        #hint {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.5);
+            font-family: sans-serif;
+            font-size: 0.85rem;
+            z-index: 50;
+            pointer-events: none;
+            text-align: center;
+            transition: opacity 0.5s;
+        }
+    </style>
+</head>
+<body>
+    <div id="overlay">
+        <h1>🍺 iBeer</h1>
+        <p>Tilt to pour • Shake to foam<br>Tap to refill when empty</p>
+        <button id="startBtn">OPEN BEER</button>
+        <button id="permissionBtn">Enable Motion</button>
+    </div>
+    <div id="hint">Tilt your phone to drink • Shake to foam up</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // === AUDIO ENGINE ===
+        const AudioEngine = {
+            ctx: null,
+            init() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            },
+            playOpen() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            },
+            playPour() {
+                if (!this.ctx) return;
+                // White noise for pouring
+                const bufferSize = this.ctx.sampleRate * 0.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * 0.1;
+                }
+                const source = this.ctx.createBufferSource();
+                source.buffer = buffer;
+                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 2000;
+                source.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                gain.gain.setValueAtTime(0, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 0.1);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5);
+                source.start();
+            },
+            playBurp() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.5);
+            },
+            playFoam() {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.3;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * 0.2;
+                }
+                const source = this.ctx.createBufferSource();
+                source.buffer = buffer;
+                const gain = this.ctx.createGain();
+                gain.connect(this.ctx.destination);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0, this.ctx.currentTime + 0.3);
+                source.connect(gain);
+                source.start();
+            }
+        };
+
+        // === CANVAS SETUP ===
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let W, H, scale;
+
+        function resize() {
+            W = window.innerWidth;
+            H = window.innerHeight;
+            scale = Math.min(W, H) / 400;
+            canvas.width = W * window.devicePixelRatio;
+            canvas.height = H * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        // === PHYSICS STATE ===
+        const state = {
+            fillLevel: 1.0,        // 0 to 1
+            tiltAngle: 0,          // radians
+            targetTilt: 0,
+            foamLevel: 0,          // 0 to 0.3 (extra foam on top)
+            foamBubbles: [],
+            isPouring: false,
+            glassWobble: 0,
+            glassWobbleVel: 0,
+            lastShakeTime: 0,
+            burpPlayed: false,
+            refillAnim: 0,
+            bubbles: []
+        };
+
+        // Generate background bubbles
+        for (let i = 0; i < 30; i++) {
+            state.bubbles.push({
+                x: Math.random(),
+                y: Math.random(),
+                r: 2 + Math.random() * 4,
+                speed: 0.3 + Math.random() * 0.7,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+
+        // === GLASS GEOMETRY ===
+        const glass = {
+            width: 160,
+            height: 280,
+            bottomWidth: 100,
+            topWidth: 140,
+            wallThickness: 8,
+            baseHeight: 20,
+            getPath() {
+                const w = this.width * scale;
+                const h = this.height * scale;
+                const bw = this.bottomWidth * scale;
+                const tw = this.topWidth * scale;
+                const cx = W / 2;
+                const cy = H / 2 + 20 * scale;
+                return {
+                    cx, cy, w, h, bw, tw,
+                    leftX: (x) => cx - bw/2 - (tw - bw)/2 * (x / h),
+                    rightX: (x) => cx + bw/2 + (tw - bw)/2 * (x / h),
+                    bottomY: cy + h/2,
+                    topY: cy - h/2
+                };
+            }
+        };
+
+        // === INPUT HANDLING ===
+        let motionEnabled = false;
+        let shakeAccumulator = 0;
+        let lastX = 0, lastY = 0, lastZ = 0;
+
+        // Device Orientation (tilt)
+        window.addEventListener('deviceorientation', (e) => {
+            if (!motionEnabled) return;
+            // beta: front-back tilt (-180 to 180)
+            // gamma: left-right tilt (-90 to 90)
+            const beta = e.beta || 0;
+            const gamma = e.gamma || 0;
+
+            // Combine for tilt feel
+            state.targetTilt = (beta * 0.6 + gamma * 0.4) * Math.PI / 180;
+
+            // Clamp
+            state.targetTilt = Math.max(-1.2, Math.min(1.2, state.targetTilt));
+        });
+
+        // Device Motion (shake detection)
+        window.addEventListener('devicemotion', (e) => {
+            if (!motionEnabled) return;
+            const acc = e.accelerationIncludingGravity;
+            if (!acc) return;
+
+            const x = acc.x || 0;
+            const y = acc.y || 0;
+            const z = acc.z || 0;
+
+            const delta = Math.abs(x - lastX) + Math.abs(y - lastY) + Math.abs(z - lastZ);
+            shakeAccumulator = shakeAccumulator * 0.8 + delta * 0.2;
+
+            lastX = x; lastY = y; lastZ = z;
+
+            // Shake threshold
+            if (shakeAccumulator > 25 && Date.now() - state.lastShakeTime > 800) {
+                state.lastShakeTime = Date.now();
+                triggerFoam();
+            }
+        });
+
+        // Mouse/Touch fallback for desktop
+        let isDragging = false;
+        let lastMouseY = 0;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseY = e.clientY;
+            if (state.fillLevel < 0.05) refill();
+        });
+        window.addEventListener('mouseup', () => isDragging = false);
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dy = e.clientY - lastMouseY;
+            state.targetTilt += dy * 0.005;
+            state.targetTilt = Math.max(-1.2, Math.min(1.2, state.targetTilt));
+            lastMouseY = e.clientY;
+        });
+
+        // Touch
+        canvas.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            lastMouseY = e.touches[0].clientY;
+            if (state.fillLevel < 0.05) refill();
+        }, {passive: false});
+        window.addEventListener('touchend', () => isDragging = false);
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const dy = e.touches[0].clientY - lastMouseY;
+            state.targetTilt += dy * 0.005;
+            state.targetTilt = Math.max(-1.2, Math.min(1.2, state.targetTilt));
+            lastMouseY = e.touches[0].clientY;
+        }, {passive: false});
+
+        // Shake fallback (keyboard)
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                triggerFoam();
+            }
+        });
+
+        function triggerFoam() {
+            state.foamLevel = Math.min(0.35, state.foamLevel + 0.15);
+            state.glassWobbleVel += 0.15;
+            AudioEngine.playFoam();
+
+            // Add foam bubbles
+            for (let i = 0; i < 15; i++) {
+                state.foamBubbles.push({
+                    x: 0.3 + Math.random() * 0.4,
+                    y: 0,
+                    r: 3 + Math.random() * 6,
+                    life: 1.0,
+                    vx: (Math.random() - 0.5) * 0.02,
+                    vy: -0.01 - Math.random() * 0.02
+                });
+            }
+        }
+
+        function refill() {
+            state.fillLevel = 1.0;
+            state.foamLevel = 0.08;
+            state.burpPlayed = false;
+            state.refillAnim = 1.0;
+            AudioEngine.playOpen();
+            AudioEngine.playPour();
+
+            // Reset foam bubbles
+            state.foamBubbles = [];
+            for (let i = 0; i < 20; i++) {
+                state.foamBubbles.push({
+                    x: 0.2 + Math.random() * 0.6,
+                    y: Math.random() * 0.3,
+                    r: 4 + Math.random() * 8,
+                    life: 1.0,
+                    vx: (Math.random() - 0.5) * 0.005,
+                    vy: -0.005 - Math.random() * 0.01
+                });
+            }
+        }
+
+        // === RENDERING ===
+        function drawGlassShape(g, isBack = false) {
+            const t = glass.wallThickness * scale;
+            ctx.beginPath();
+
+            // Bottom
+            ctx.moveTo(g.cx - g.bw/2 + (isBack ? 0 : t), g.bottomY);
+
+            // Left side
+            ctx.lineTo(g.cx - g.tw/2 + (isBack ? 0 : t), g.topY + (isBack ? 0 : t));
+
+            // Top rim
+            ctx.lineTo(g.cx + g.tw/2 - (isBack ? 0 : t), g.topY + (isBack ? 0 : t));
+
+            // Right side
+            ctx.lineTo(g.cx + g.bw/2 - (isBack ? 0 : t), g.bottomY);
+
+            // Bottom curve
+            ctx.quadraticCurveTo(g.cx, g.bottomY + t * 2, g.cx - g.bw/2 + (isBack ? 0 : t), g.bottomY);
+
+            ctx.closePath();
+        }
+
+        function drawBeer(g) {
+            if (state.fillLevel <= 0.01) return;
+
+            const fillH = g.h * state.fillLevel;
+            const beerTop = g.bottomY - fillH;
+            const foamH = g.h * state.foamLevel;
+            const foamTop = beerTop - foamH;
+
+            // Beer liquid
+            ctx.save();
+            ctx.beginPath();
+
+            // Calculate surface width at beer top
+            const beerTopProgress = (g.bottomY - beerTop) / g.h;
+            const beerTopHalfWidth = g.bw/2 + (g.tw - g.bw)/2 * beerTopProgress;
+            const foamTopProgress = (g.bottomY - foamTop) / g.h;
+            const foamTopHalfWidth = g.bw/2 + (g.tw - g.bw)/2 * Math.min(foamTopProgress, 1);
+
+            // Left side
+            ctx.moveTo(g.cx - g.bw/2 + 4*scale, g.bottomY - 4*scale);
+            ctx.lineTo(g.cx - beerTopHalfWidth + 4*scale, beerTop);
+
+            // Surface (with tilt)
+            const surfaceTilt = state.tiltAngle * 30 * scale;
+            ctx.lineTo(g.cx + beerTopHalfWidth - 4*scale, beerTop + surfaceTilt);
+
+            // Right side
+            ctx.lineTo(g.cx + g.bw/2 - 4*scale, g.bottomY - 4*scale);
+
+            // Bottom
+            ctx.quadraticCurveTo(g.cx, g.bottomY + 4*scale, g.cx - g.bw/2 + 4*scale, g.bottomY - 4*scale);
+            ctx.closePath();
+
+            // Beer gradient
+            const grad = ctx.createLinearGradient(g.cx, g.bottomY, g.cx, beerTop);
+            grad.addColorStop(0, '#8B4513');
+            grad.addColorStop(0.3, '#CD853F');
+            grad.addColorStop(0.7, '#DAA520');
+            grad.addColorStop(1, '#F4A460');
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Beer bubbles inside
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#FFE4B5';
+            for (let b of state.bubbles) {
+                if (b.y < state.fillLevel) {
+                    const bx = g.cx - g.bw/2 + b.x * g.bw;
+                    const by = g.bottomY - b.y * g.h;
+                    ctx.beginPath();
+                    ctx.arc(bx, by, b.r * scale * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            // Foam
+            if (state.foamLevel > 0.01) {
+                ctx.save();
+                ctx.beginPath();
+
+                const fLeft = g.cx - foamTopHalfWidth + 2*scale;
+                const fRight = g.cx + foamTopHalfWidth - 2*scale;
+
+                ctx.moveTo(fLeft, beerTop);
+
+                // Foam surface with bubbles
+                const segments = 20;
+                for (let i = 0; i <= segments; i++) {
+                    const t = i / segments;
+                    const x = fLeft + (fRight - fLeft) * t;
+                    const baseY = beerTop + surfaceTilt * t;
+                    const bubbleH = Math.sin(t * Math.PI * 4 + Date.now() * 0.002) * 4 * scale;
+                    const bubbleH2 = Math.sin(t * Math.PI * 7 + Date.now() * 0.003) * 2 * scale;
+                    ctx.lineTo(x, baseY - Math.abs(bubbleH) - Math.abs(bubbleH2) - 2*scale);
+                }
+
+                ctx.lineTo(fRight, beerTop);
+                ctx.lineTo(g.cx + beerTopHalfWidth - 4*scale, beerTop);
+                ctx.lineTo(g.cx - beerTopHalfWidth + 4*scale, beerTop);
+                ctx.closePath();
+
+                const foamGrad = ctx.createLinearGradient(g.cx, beerTop, g.cx, foamTop - 10*scale);
+                foamGrad.addColorStop(0, '#FFF8DC');
+                foamGrad.addColorStop(0.5, '#FFFACD');
+                foamGrad.addColorStop(1, '#FFFFFF');
+                ctx.fillStyle = foamGrad;
+                ctx.fill();
+
+                // Foam bubbles
+                ctx.fillStyle = '#FFF';
+                for (let b of state.foamBubbles) {
+                    const bx = g.cx - g.tw/2 + b.x * g.tw;
+                    const by = beerTop + b.y * g.h;
+                    ctx.globalAlpha = b.life * 0.8;
+                    ctx.beginPath();
+                    ctx.arc(bx, by, b.r * scale * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+        }
+
+        function drawGlass(g) {
+            // Glass back (inner shadow)
+            ctx.save();
+            ctx.fillStyle = 'rgba(255,255,255,0.03)';
+            drawGlassShape(g, true);
+            ctx.fill();
+            ctx.restore();
+
+            // Glass front
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+            ctx.lineWidth = 3 * scale;
+            ctx.lineCap = 'round';
+            drawGlassShape(g, false);
+            ctx.stroke();
+
+            // Glass shine
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 2 * scale;
+            ctx.moveTo(g.cx - g.tw/2 + 15*scale, g.topY + 10*scale);
+            ctx.lineTo(g.cx - g.bw/2 + 15*scale, g.bottomY - 10*scale);
+            ctx.stroke();
+
+            // Rim highlight
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 2 * scale;
+            ctx.moveTo(g.cx - g.tw/2 + 5*scale, g.topY + 2*scale);
+            ctx.lineTo(g.cx + g.tw/2 - 5*scale, g.topY + 2*scale);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawPourStream(g) {
+            if (!state.isPouring || state.fillLevel <= 0.05) return;
+
+            const pourX = g.cx + g.tw/2 * Math.sin(state.tiltAngle);
+            const pourY = g.topY + 20 * scale;
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(218,165,32,0.6)';
+            ctx.lineWidth = 8 * scale;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(pourX, pourY);
+            ctx.quadraticCurveTo(
+                pourX + 20*scale, pourY + 50*scale,
+                pourX + 10*scale, pourY + 100*scale
+            );
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawBackground() {
+            // Dark bar background
+            const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W,H));
+            grad.addColorStop(0, '#1a0a00');
+            grad.addColorStop(0.5, '#0d0500');
+            grad.addColorStop(1, '#000000');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            // Subtle wood texture lines
+            ctx.save();
+            ctx.strokeStyle = 'rgba(139,69,19,0.08)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < H; i += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(W, i + Math.sin(i * 0.01) * 20);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function updatePhysics() {
+            // Smooth tilt
+            state.tiltAngle += (state.targetTilt - state.tiltAngle) * 0.1;
+
+            // Glass wobble physics
+            state.glassWobbleVel += -state.glassWobble * 0.1 - state.glassWobbleVel * 0.15;
+            state.glassWobble += state.glassWobbleVel;
+
+            // Shake decay
+            shakeAccumulator *= 0.95;
+
+            // Foam decay
+            state.foamLevel *= 0.9995;
+            if (state.foamLevel < 0.001) state.foamLevel = 0;
+
+            // Foam bubbles
+            for (let b of state.foamBubbles) {
+                b.x += b.vx;
+                b.y += b.vy;
+                b.life *= 0.995;
+                b.r *= 0.999;
+            }
+            state.foamBubbles = state.foamBubbles.filter(b => b.life > 0.01 && b.r > 0.5);
+
+            // Background bubbles
+            for (let b of state.bubbles) {
+                b.y -= b.speed * 0.002;
+                if (b.y < 0) b.y = 1;
+                b.x += Math.sin(Date.now() * 0.001 + b.phase) * 0.001;
+            }
+
+            // Pour detection
+            const pourThreshold = 0.3;
+            const wasPouring = state.isPouring;
+            state.isPouring = Math.abs(state.tiltAngle) > pourThreshold && state.fillLevel > 0.05;
+
+            if (state.isPouring && !wasPouring) {
+                AudioEngine.playPour();
+            }
+
+            // Drink logic
+            if (state.isPouring) {
+                const drinkRate = 0.003 * Math.abs(state.tiltAngle);
+                state.fillLevel = Math.max(0, state.fillLevel - drinkRate);
+
+                // Foam goes down with beer
+                state.foamLevel = Math.max(0, state.foamLevel - drinkRate * 0.5);
+            }
+
+            // Burp at empty
+            if (state.fillLevel < 0.05 && !state.burpPlayed && !state.isPouring) {
+                state.burpPlayed = true;
+                AudioEngine.playBurp();
+            }
+
+            // Refill animation
+            if (state.refillAnim > 0) {
+                state.refillAnim *= 0.95;
+                if (state.refillAnim < 0.01) state.refillAnim = 0;
+            }
+        }
+
+        function render() {
+            updatePhysics();
+
+            ctx.clearRect(0, 0, W, H);
+            drawBackground();
+
+            const g = glass.getPath();
+
+            ctx.save();
+
+            // Apply glass wobble + tilt rotation
+            const totalRotation = state.tiltAngle + state.glassWobble;
+            ctx.translate(g.cx, g.cy + g.h/2 - 20*scale);
+            ctx.rotate(totalRotation * 0.3);
+            ctx.translate(-g.cx, -(g.cy + g.h/2 - 20*scale));
+
+            // Refill flash
+            if (state.refillAnim > 0) {
+                ctx.save();
+                ctx.fillStyle = `rgba(255,255,255,${state.refillAnim * 0.3})`;
+                ctx.fillRect(0, 0, W, H);
+                ctx.restore();
+            }
+
+            drawGlassShape(g, true);
+            ctx.clip();
+            drawBeer(g);
+            ctx.restore();
+
+            ctx.save();
+            ctx.translate(g.cx, g.cy + g.h/2 - 20*scale);
+            ctx.rotate(totalRotation * 0.3);
+            ctx.translate(-g.cx, -(g.cy + g.h/2 - 20*scale));
+
+            drawGlass(g);
+            drawPourStream(g);
+            ctx.restore();
+
+            // Empty state hint
+            if (state.fillLevel < 0.05) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.font = `${16 * scale}px -apple-system, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText('Tap to refill', W/2, H/2 + g.h/2 + 40*scale);
+                ctx.restore();
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        // === STARTUP ===
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('startBtn');
+        const permissionBtn = document.getElementById('permissionBtn');
+        const hint = document.getElementById('hint');
+
+        startBtn.addEventListener('click', async () => {
+            AudioEngine.init();
+
+            // Request motion permission on iOS
+            if (typeof DeviceOrientationEvent !== 'undefined' && 
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        motionEnabled = true;
+                    } else {
+                        permissionBtn.style.display = 'block';
+                        startBtn.textContent = 'Continue without motion';
+                        return;
+                    }
+                } catch (e) {
+                    permissionBtn.style.display = 'block';
+                    startBtn.textContent = 'Continue without motion';
+                    return;
+                }
+            } else {
+                motionEnabled = true;
+            }
+
+            overlay.classList.add('hidden');
+            refill();
+            render();
+
+            // Hide hint after 5 seconds
+            setTimeout(() => {
+                hint.style.opacity = '0';
+            }, 5000);
+        });
+
+        permissionBtn.addEventListener('click', async () => {
+            try {
+                const permission = await DeviceOrientationEvent.requestPermission();
+                if (permission === 'granted') {
+                    motionEnabled = true;
+                    overlay.classList.add('hidden');
+                    refill();
+                    render();
+                }
+            } catch (e) {
+                alert('Motion access denied. Use touch/mouse to tilt.');
+                motionEnabled = false;
+                overlay.classList.add('hidden');
+                refill();
+                render();
+            }
+        });
+
+        // Double-tap to refill
+        let lastTap = 0;
+        canvas.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTap < 300 && state.fillLevel < 0.05) {
+                refill();
+            }
+            lastTap = now;
+        });
+
+        // Prevent scroll/zoom
+        document.addEventListener('gesturestart', e => e.preventDefault());
+        document.addEventListener('gesturechange', e => e.preventDefault());
+        document.addEventListener('gestureend', e => e.preventDefault());
+    </script>
+</body>
+</html>
