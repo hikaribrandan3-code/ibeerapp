@@ -266,18 +266,18 @@
         // Device Motion — primary input using gravity vector (reliable across iOS/Android)
         window.addEventListener('devicemotion', (e) => {
             if (!motionEnabled) return;
-            const acc = e.accelerationIncludingGravity;
-            if (!acc) return;
+            const accg = e.accelerationIncludingGravity;
+            if (!accg) return;
 
-            const x = acc.x || 0;
-            const y = acc.y || 0;
-            const z = acc.z || 0;
+            const gx = accg.x || 0;
+            const gy = accg.y || 0;
+            const gz = accg.z || 0;
 
             // Normalize gravity vector to unit length
-            const g = Math.sqrt(x*x + y*y + z*z) || 9.8;
-            const nx = x / g;
-            const ny = y / g;
-            const nz = z / g;
+            const g = Math.sqrt(gx*gx + gy*gy + gz*gz) || 9.8;
+            const nx = gx / g;
+            const ny = gy / g;
+            const nz = gz / g;
 
             // Calibration phase: average the first N readings to establish zero
             if (calibrating) {
@@ -292,6 +292,8 @@
                     zeroTilt = Math.atan2(avgNx, avgNy);
                     zeroFbTilt = Math.atan2(avgNz, avgNy);
                     calibrating = false;
+                    // Reset shake baseline so calibration doesn't cause a false trigger
+                    lastX = gx; lastY = gy; lastZ = gz;
                 }
                 return;
             }
@@ -308,12 +310,23 @@
             // When tilted forward:  nz≈-1, ny≈0 → atan2(-1,0) = -π/2
             state.targetFbTilt = (Math.atan2(nz, ny) - zeroFbTilt) * 0.82;
 
-            // Shake detection
-            const delta = Math.abs(x - lastX) + Math.abs(y - lastY) + Math.abs(z - lastZ);
+            // Shake detection — use linear acceleration (without gravity) if available.
+            // This is far more sensitive to actual shaking than accelerationIncludingGravity.
+            const acc = e.acceleration;
+            let sx, sy, sz;
+            if (acc && (acc.x !== null || acc.y !== null || acc.z !== null)) {
+                sx = acc.x || 0;
+                sy = acc.y || 0;
+                sz = acc.z || 0;
+            } else {
+                // Fallback: use gravity-included data, but it's less sensitive
+                sx = gx; sy = gy; sz = gz;
+            }
+            const delta = Math.abs(sx - lastX) + Math.abs(sy - lastY) + Math.abs(sz - lastZ);
             shakeAccumulator = shakeAccumulator * 0.8 + delta * 0.2;
-            lastX = x; lastY = y; lastZ = z;
+            lastX = sx; lastY = sy; lastZ = sz;
 
-            if (shakeAccumulator > 25 && Date.now() - state.lastShakeTime > 800) {
+            if (shakeAccumulator > 18 && Date.now() - state.lastShakeTime > 800) {
                 state.lastShakeTime = Date.now();
                 triggerFoam();
             }
