@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>iBeer</title>
-    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiaUJlZXIiLCJzaG9ydF9uYW1lIjoiaUJlZXIiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzAwMDAwMCIsInRoZW1lX2NvbG9yIjoiIzAwMDAwMCJ9">
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiaUJlZXIiLCJzaG9ydF9uYW1lIjoiaUJlZXIiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kb2xvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzAwMDAwMCIsInRoZW1lX2NvbG9yIjoiIzAwMDAwMCJ9">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -21,13 +21,14 @@
             align-items: center;
             justify-content: center;
         }
-        canvas {
-            display: block;
-        }
+        canvas { display: block; }
+
         #overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.85);
+            background: rgba(8, 4, 0, 0.93);
+            backdrop-filter: blur(24px) saturate(1.2);
+            -webkit-backdrop-filter: blur(24px) saturate(1.2);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -36,72 +37,146 @@
             color: #fff;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             text-align: center;
-            padding: 20px;
+            padding: 24px;
+            transition: opacity 0.6s ease;
         }
+        #overlay.hidden { opacity: 0; pointer-events: none; }
+
+        .glass-icon {
+            width: 70px;
+            height: 110px;
+            border: 3px solid rgba(212, 160, 23, 0.45);
+            border-radius: 0 0 32px 32px;
+            border-top: none;
+            position: relative;
+            margin-bottom: 28px;
+            box-shadow: inset 0 -20px 30px rgba(212, 160, 23, 0.15), 0 0 40px rgba(212, 160, 23, 0.1);
+        }
+        .glass-icon::before {
+            content: '';
+            position: absolute;
+            top: -3px; left: -3px; right: -3px;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(212, 160, 23, 0.5);
+            box-shadow: 0 0 12px rgba(212, 160, 23, 0.3);
+        }
+        .glass-icon::after {
+            content: '';
+            position: absolute;
+            bottom: 12px; left: 10px;
+            width: 6px; height: 40px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.15);
+        }
+        .glass-liquid {
+            position: absolute;
+            bottom: 6px; left: 6px; right: 6px;
+            height: 55%;
+            border-radius: 0 0 24px 24px;
+            background: linear-gradient(180deg, rgba(245, 200, 80, 0.25) 0%, rgba(212, 160, 23, 0.35) 100%);
+        }
+        .glass-foam {
+            position: absolute;
+            bottom: calc(55% + 2px); left: 4px; right: 4px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255, 250, 235, 0.5);
+            filter: blur(2px);
+        }
+
         #overlay h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            color: #f5a623;
-            text-shadow: 0 0 20px rgba(245,166,35,0.5);
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
+            color: #f2c94c;
+            text-shadow: 0 0 30px rgba(242, 201, 76, 0.35);
         }
-        #overlay p {
-            font-size: 1rem;
-            color: #ccc;
-            margin-bottom: 30px;
-            line-height: 1.5;
+        #overlay .tagline {
+            font-size: 1.05rem;
+            color: rgba(255, 255, 255, 0.45);
+            margin-bottom: 40px;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+        #overlay .instructions {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 40px;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.35);
+        }
+        #overlay .instructions span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
         #startBtn {
-            background: linear-gradient(135deg, #f5a623 0%, #d4891a 100%);
+            background: linear-gradient(135deg, #f2c94c 0%, #d4a017 100%);
             border: none;
-            padding: 16px 48px;
-            font-size: 1.2rem;
-            color: #000;
+            padding: 18px 56px;
+            font-size: 1.15rem;
+            color: #1a0f00;
             font-weight: 700;
             border-radius: 50px;
             cursor: pointer;
-            box-shadow: 0 4px 20px rgba(245,166,35,0.4);
-            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 6px 30px rgba(242, 201, 76, 0.25), inset 0 1px 0 rgba(255,255,255,0.3);
+            transition: transform 0.15s, box-shadow 0.15s;
+            letter-spacing: 0.5px;
         }
         #startBtn:active {
-            transform: scale(0.95);
-            box-shadow: 0 2px 10px rgba(245,166,35,0.3);
+            transform: scale(0.96);
+            box-shadow: 0 3px 15px rgba(242, 201, 76, 0.2);
         }
         #permissionBtn {
             background: transparent;
-            border: 2px solid #f5a623;
+            border: 2px solid rgba(242, 201, 76, 0.5);
             padding: 12px 32px;
-            font-size: 1rem;
-            color: #f5a623;
+            font-size: 0.95rem;
+            color: #f2c94c;
             font-weight: 600;
             border-radius: 50px;
             cursor: pointer;
-            margin-top: 15px;
+            margin-top: 16px;
             display: none;
+            transition: background 0.2s;
         }
-        .hidden { display: none !important; }
+        #permissionBtn:hover { background: rgba(242, 201, 76, 0.08); }
+
         #hint {
             position: fixed;
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            color: rgba(255,255,255,0.5);
+            color: rgba(255,255,255,0.35);
             font-family: sans-serif;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             z-index: 50;
             pointer-events: none;
             text-align: center;
             transition: opacity 0.5s;
+            letter-spacing: 0.3px;
         }
     </style>
 </head>
 <body>
     <div id="overlay">
-        <h1>🍺 iBeer</h1>
-        <p>Tilt to pour • Shake to foam<br>Tap to refill when empty</p>
+        <div class="glass-icon">
+            <div class="glass-liquid"></div>
+            <div class="glass-foam"></div>
+        </div>
+        <h1>iBeer</h1>
+        <p class="tagline">The original. Remastered.</p>
+        <div class="instructions">
+            <span>↻ Tilt to drink</span>
+            <span>⌇ Shake to foam</span>
+            <span>⇧ Tap to refill</span>
+        </div>
         <button id="startBtn">OPEN BEER</button>
         <button id="permissionBtn">Enable Motion</button>
     </div>
-    <div id="hint">Tilt your phone to drink • Shake to foam up</div>
+    <div id="hint">Tilt your phone to drink &middot; Shake to foam up</div>
     <canvas id="canvas"></canvas>
 
     <script>
@@ -126,7 +201,6 @@
             },
             playPour() {
                 if (!this.ctx) return;
-                // White noise for pouring
                 const bufferSize = this.ctx.sampleRate * 0.5;
                 const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
                 const data = buffer.getChannelData(0);
@@ -198,12 +272,12 @@
 
         // === PHYSICS STATE ===
         const state = {
-            fillLevel: 1.0,        // 0 to 1
-            tiltAngle: 0,          // radians — left/right tilt for visual
+            fillLevel: 1.0,
+            tiltAngle: 0,
             targetTilt: 0,
-            fbTilt: 0,             // radians — front/back tilt for drinking
+            fbTilt: 0,
             targetFbTilt: 0,
-            foamLevel: 0,          // 0 to 0.3 (extra foam on top)
+            foamLevel: 0,
             foamBubbles: [],
             isPouring: false,
             glassWobble: 0,
@@ -211,17 +285,29 @@
             lastShakeTime: 0,
             burpPlayed: false,
             refillAnim: 0,
-            bubbles: []
+            bubbles: [],
+            condensation: []
         };
 
-        // Generate background bubbles
-        for (let i = 0; i < 30; i++) {
+        // Beer bubbles inside liquid
+        for (let i = 0; i < 60; i++) {
             state.bubbles.push({
                 x: Math.random(),
                 y: Math.random(),
-                r: 2 + Math.random() * 4,
-                speed: 0.3 + Math.random() * 0.7,
-                phase: Math.random() * Math.PI * 2
+                r: 1 + Math.random() * 3,
+                speed: 0.2 + Math.random() * 1.2,
+                phase: Math.random() * Math.PI * 2,
+                wobble: 0.3 + Math.random() * 0.7
+            });
+        }
+
+        // Condensation droplets on glass exterior
+        for (let i = 0; i < 40; i++) {
+            state.condensation.push({
+                y: 0.1 + Math.random() * 0.75,
+                xOffset: (Math.random() - 0.5) * 0.85,
+                r: 1 + Math.random() * 2.5,
+                opacity: 0.1 + Math.random() * 0.3
             });
         }
 
@@ -240,13 +326,7 @@
                 const tw = this.topWidth * scale;
                 const cx = W / 2;
                 const cy = H / 2 + 20 * scale;
-                return {
-                    cx, cy, w, h, bw, tw,
-                    leftX: (x) => cx - bw/2 - (tw - bw)/2 * (x / h),
-                    rightX: (x) => cx + bw/2 + (tw - bw)/2 * (x / h),
-                    bottomY: cy + h/2,
-                    topY: cy - h/2
-                };
+                return { cx, cy, w, h, bw, tw, bottomY: cy + h/2, topY: cy - h/2 };
             }
         };
 
@@ -255,7 +335,6 @@
         let shakeAccumulator = 0;
         let lastX = 0, lastY = 0, lastZ = 0;
 
-        // Calibration: capture the "straight" position on startup to cancel hardware bias
         let calibrating = false;
         let calibrateCount = 0;
         const CALIBRATE_FRAMES = 15;
@@ -263,7 +342,6 @@
         let zeroTilt = 0;
         let zeroFbTilt = 0;
 
-        // Device Motion — primary input using gravity vector (reliable across iOS/Android)
         window.addEventListener('devicemotion', (e) => {
             if (!motionEnabled) return;
             const accg = e.accelerationIncludingGravity;
@@ -273,13 +351,11 @@
             const gy = accg.y || 0;
             const gz = accg.z || 0;
 
-            // Normalize gravity vector to unit length
             const g = Math.sqrt(gx*gx + gy*gy + gz*gz) || 9.8;
             const nx = gx / g;
             const ny = gy / g;
             const nz = gz / g;
 
-            // Calibration phase: average the first N readings to establish zero
             if (calibrating) {
                 calSumNx += nx;
                 calSumNy += ny;
@@ -292,26 +368,14 @@
                     zeroTilt = Math.atan2(avgNx, avgNy);
                     zeroFbTilt = Math.atan2(avgNz, avgNy);
                     calibrating = false;
-                    // Reset shake baseline so calibration doesn't cause a false trigger
                     lastX = gx; lastY = gy; lastZ = gz;
                 }
                 return;
             }
 
-            // Left-right tilt: angle of gravity projected onto the device's x-y plane.
-            // When phone is upright: nx≈0, ny≈1  → atan2(0,1) = 0
-            // When tilted right:    nx≈1, ny≈0  → atan2(1,0) = +π/2
-            // When tilted left:     nx≈-1, ny≈0 → atan2(-1,0) = -π/2
             state.targetTilt = (Math.atan2(nx, ny) - zeroTilt) * 0.82;
-
-            // Front-back tilt: angle from vertical in the y-z plane.
-            // When upright:         nz≈0, ny≈1  → atan2(0,1) = 0
-            // When tilted back:     nz≈1, ny≈0  → atan2(1,0) = +π/2  (drinking)
-            // When tilted forward:  nz≈-1, ny≈0 → atan2(-1,0) = -π/2
             state.targetFbTilt = (Math.atan2(nz, ny) - zeroFbTilt) * 0.82;
 
-            // Shake detection — use linear acceleration (without gravity) if available.
-            // This is far more sensitive to actual shaking than accelerationIncludingGravity.
             const acc = e.acceleration;
             let sx, sy, sz;
             if (acc && (acc.x !== null || acc.y !== null || acc.z !== null)) {
@@ -319,7 +383,6 @@
                 sy = acc.y || 0;
                 sz = acc.z || 0;
             } else {
-                // Fallback: use gravity-included data, but it's less sensitive
                 sx = gx; sy = gy; sz = gz;
             }
             const delta = Math.abs(sx - lastX) + Math.abs(sy - lastY) + Math.abs(sz - lastZ);
@@ -332,10 +395,7 @@
             }
         });
 
-        // Mouse/Touch fallback for desktop
         let isDragging = false;
-        let lastMouseY = 0;
-
         canvas.addEventListener('mousedown', (e) => {
             isDragging = true;
             if (state.fillLevel < 0.05) refill();
@@ -343,13 +403,11 @@
         window.addEventListener('mouseup', () => isDragging = false);
         window.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            // Map vertical position to tilt: top of screen = tilt back (drink)
             const normalizedY = (e.clientY / window.innerHeight - 0.5) * 2;
             state.targetTilt = -normalizedY * 1.0;
             state.targetTilt = Math.max(-1.2, Math.min(1.2, state.targetTilt));
         });
 
-        // Touch
         canvas.addEventListener('touchstart', (e) => {
             isDragging = true;
             if (state.fillLevel < 0.05) refill();
@@ -362,19 +420,14 @@
             state.targetTilt = Math.max(-1.2, Math.min(1.2, state.targetTilt));
         }, {passive: false});
 
-        // Shake fallback (keyboard)
         window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') {
-                triggerFoam();
-            }
+            if (e.code === 'Space') triggerFoam();
         });
 
         function triggerFoam() {
             state.foamLevel = Math.min(0.35, state.foamLevel + 0.15);
             state.glassWobbleVel += 0.15;
             AudioEngine.playFoam();
-
-            // Add foam bubbles
             for (let i = 0; i < 15; i++) {
                 state.foamBubbles.push({
                     x: 0.3 + Math.random() * 0.4,
@@ -394,8 +447,6 @@
             state.refillAnim = 1.0;
             AudioEngine.playOpen();
             AudioEngine.playPour();
-
-            // Reset foam bubbles
             state.foamBubbles = [];
             for (let i = 0; i < 20; i++) {
                 state.foamBubbles.push({
@@ -413,22 +464,11 @@
         function drawGlassShape(g, isBack = false) {
             const t = glass.wallThickness * scale;
             ctx.beginPath();
-
-            // Bottom
             ctx.moveTo(g.cx - g.bw/2 + (isBack ? 0 : t), g.bottomY);
-
-            // Left side
             ctx.lineTo(g.cx - g.tw/2 + (isBack ? 0 : t), g.topY + (isBack ? 0 : t));
-
-            // Top rim
             ctx.lineTo(g.cx + g.tw/2 - (isBack ? 0 : t), g.topY + (isBack ? 0 : t));
-
-            // Right side
             ctx.lineTo(g.cx + g.bw/2 - (isBack ? 0 : t), g.bottomY);
-
-            // Bottom curve
             ctx.quadraticCurveTo(g.cx, g.bottomY + t * 2, g.cx - g.bw/2 + (isBack ? 0 : t), g.bottomY);
-
             ctx.closePath();
         }
 
@@ -440,197 +480,342 @@
             const foamH = g.h * state.foamLevel;
             const foamTop = beerTop - foamH;
 
-            // Beer liquid
-            ctx.save();
-            ctx.beginPath();
-
-            // Calculate surface width at beer top
             const beerTopProgress = (g.bottomY - beerTop) / g.h;
             const beerTopHalfWidth = g.bw/2 + (g.tw - g.bw)/2 * beerTopProgress;
             const foamTopProgress = (g.bottomY - foamTop) / g.h;
             const foamTopHalfWidth = g.bw/2 + (g.tw - g.bw)/2 * Math.min(foamTopProgress, 1);
 
-            // Left side
+            const surfaceTilt = -state.tiltAngle * 48 * scale;
+
+            // === LIQUID BODY ===
+            ctx.save();
+            ctx.beginPath();
             ctx.moveTo(g.cx - g.bw/2 + 4*scale, g.bottomY - 4*scale);
             ctx.lineTo(g.cx - beerTopHalfWidth + 4*scale, beerTop);
-
-            // Surface stays level with gravity (counter-tilts relative to glass)
-            // Factor computed from glass geometry: width ~132px * rotation 0.35 ≈ 46
-            const surfaceTilt = -state.tiltAngle * 48 * scale;
             ctx.lineTo(g.cx + beerTopHalfWidth - 4*scale, beerTop + surfaceTilt);
-
-            // Right side
             ctx.lineTo(g.cx + g.bw/2 - 4*scale, g.bottomY - 4*scale);
-
-            // Bottom
             ctx.quadraticCurveTo(g.cx, g.bottomY + 4*scale, g.cx - g.bw/2 + 4*scale, g.bottomY - 4*scale);
             ctx.closePath();
 
-            // Beer gradient
+            // Deep multi-stop gradient for realistic amber beer
             const grad = ctx.createLinearGradient(g.cx, g.bottomY, g.cx, beerTop);
-            grad.addColorStop(0, '#8B4513');
-            grad.addColorStop(0.3, '#CD853F');
-            grad.addColorStop(0.7, '#DAA520');
-            grad.addColorStop(1, '#F4A460');
+            grad.addColorStop(0, '#5c2e08');      // deep shadow at bottom
+            grad.addColorStop(0.15, '#8B4513');   // dark amber
+            grad.addColorStop(0.35, '#B87333');   // medium amber
+            grad.addColorStop(0.55, '#D4A017');   // golden
+            grad.addColorStop(0.78, '#E8B923');   // bright gold
+            grad.addColorStop(1, '#F5D76E');      // pale gold at meniscus
             ctx.fillStyle = grad;
             ctx.fill();
 
-            // Beer bubbles inside
-            ctx.globalAlpha = 0.3;
-            ctx.fillStyle = '#FFE4B5';
+            // Internal light refraction band (bright vertical stripe)
+            ctx.save();
+            ctx.globalCompositeOperation = 'overlay';
+            const lightGrad = ctx.createRadialGradient(
+                g.cx - 25*scale, (beerTop + g.bottomY)/2, 5*scale,
+                g.cx - 25*scale, (beerTop + g.bottomY)/2, 60*scale
+            );
+            lightGrad.addColorStop(0, 'rgba(255, 230, 150, 0.45)');
+            lightGrad.addColorStop(0.5, 'rgba(255, 200, 80, 0.15)');
+            lightGrad.addColorStop(1, 'rgba(255, 180, 50, 0)');
+            ctx.fillStyle = lightGrad;
+            ctx.fill();
+            ctx.restore();
+
+            // Dark edge tint (glass thickness absorption)
+            ctx.save();
+            ctx.globalCompositeOperation = 'multiply';
+            const edgeGrad = ctx.createLinearGradient(g.cx - beerTopHalfWidth, beerTop, g.cx + beerTopHalfWidth, beerTop);
+            edgeGrad.addColorStop(0, 'rgba(60, 20, 0, 0.5)');
+            edgeGrad.addColorStop(0.15, 'rgba(60, 20, 0, 0)');
+            edgeGrad.addColorStop(0.85, 'rgba(60, 20, 0, 0)');
+            edgeGrad.addColorStop(1, 'rgba(60, 20, 0, 0.5)');
+            ctx.fillStyle = edgeGrad;
+            ctx.fill();
+            ctx.restore();
+
+            // Bubbles inside liquid
             for (let b of state.bubbles) {
                 if (b.y < state.fillLevel) {
-                    const bx = g.cx - g.bw/2 + b.x * g.bw;
+                    const bx = g.cx - g.bw/2 + b.x * g.bw + Math.sin(Date.now() * 0.003 + b.phase) * b.wobble * 8 * scale;
                     const by = g.bottomY - b.y * g.h;
+                    const br = b.r * scale * 0.6;
+                    // Bubble body
+                    ctx.globalAlpha = 0.35;
+                    ctx.fillStyle = '#FFF8DC';
                     ctx.beginPath();
-                    ctx.arc(bx, by, b.r * scale * 0.5, 0, Math.PI * 2);
+                    ctx.arc(bx, by, br, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Bubble highlight
+                    ctx.globalAlpha = 0.6;
+                    ctx.fillStyle = '#FFF';
+                    ctx.beginPath();
+                    ctx.arc(bx - br*0.3, by - br*0.3, br*0.35, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
             ctx.globalAlpha = 1;
             ctx.restore();
 
-            // Foam
+            // === MENISCUS (surface curve at glass edges) ===
+            ctx.save();
+            ctx.beginPath();
+            const meniscusH = 4 * scale;
+            ctx.moveTo(g.cx - beerTopHalfWidth + 4*scale, beerTop);
+            ctx.quadraticCurveTo(g.cx - beerTopHalfWidth * 0.5, beerTop - meniscusH, g.cx, beerTop + surfaceTilt * 0.5);
+            ctx.quadraticCurveTo(g.cx + beerTopHalfWidth * 0.5, beerTop + surfaceTilt - meniscusH, g.cx + beerTopHalfWidth - 4*scale, beerTop + surfaceTilt);
+            ctx.lineTo(g.cx + beerTopHalfWidth - 4*scale, beerTop + surfaceTilt + 2*scale);
+            ctx.quadraticCurveTo(g.cx, beerTop + surfaceTilt * 0.5 + 2*scale, g.cx - beerTopHalfWidth + 4*scale, beerTop + 2*scale);
+            ctx.closePath();
+            const menGrad = ctx.createLinearGradient(g.cx, beerTop - meniscusH, g.cx, beerTop + 2*scale);
+            menGrad.addColorStop(0, 'rgba(255, 240, 180, 0.6)');
+            menGrad.addColorStop(0.5, 'rgba(255, 220, 100, 0.3)');
+            menGrad.addColorStop(1, 'rgba(212, 160, 23, 0)');
+            ctx.fillStyle = menGrad;
+            ctx.fill();
+            ctx.restore();
+
+            // === FOAM ===
             if (state.foamLevel > 0.01) {
-                ctx.save();
-                ctx.beginPath();
-
-                const fLeft = g.cx - foamTopHalfWidth + 2*scale;
-                const fRight = g.cx + foamTopHalfWidth - 2*scale;
-
-                ctx.moveTo(fLeft, beerTop);
-
-                // Foam surface with bubbles
-                const segments = 20;
-                for (let i = 0; i <= segments; i++) {
-                    const t = i / segments;
-                    const x = fLeft + (fRight - fLeft) * t;
-                    const baseY = beerTop + surfaceTilt * t;
-                    const bubbleH = Math.sin(t * Math.PI * 4 + Date.now() * 0.002) * 4 * scale;
-                    const bubbleH2 = Math.sin(t * Math.PI * 7 + Date.now() * 0.003) * 2 * scale;
-                    ctx.lineTo(x, baseY - Math.abs(bubbleH) - Math.abs(bubbleH2) - 2*scale);
-                }
-
-                ctx.lineTo(fRight, beerTop);
-                ctx.lineTo(g.cx + beerTopHalfWidth - 4*scale, beerTop);
-                ctx.lineTo(g.cx - beerTopHalfWidth + 4*scale, beerTop);
-                ctx.closePath();
-
-                const foamGrad = ctx.createLinearGradient(g.cx, beerTop, g.cx, foamTop - 10*scale);
-                foamGrad.addColorStop(0, '#FFF8DC');
-                foamGrad.addColorStop(0.5, '#FFFACD');
-                foamGrad.addColorStop(1, '#FFFFFF');
-                ctx.fillStyle = foamGrad;
-                ctx.fill();
-
-                // Foam bubbles
-                ctx.fillStyle = '#FFF';
-                for (let b of state.foamBubbles) {
-                    const bx = g.cx - g.tw/2 + b.x * g.tw;
-                    const by = beerTop + b.y * g.h;
-                    ctx.globalAlpha = b.life * 0.8;
-                    ctx.beginPath();
-                    ctx.arc(bx, by, b.r * scale * 0.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.globalAlpha = 1;
-                ctx.restore();
+                drawRealisticFoam(g, beerTop, foamTop, surfaceTilt, foamTopHalfWidth, beerTopHalfWidth);
             }
         }
 
-        function drawGlass(g) {
-            // Glass back (inner shadow)
+        function drawRealisticFoam(g, beerTop, foamTop, surfaceTilt, foamTopHalfWidth, beerTopHalfWidth) {
             ctx.save();
-            ctx.fillStyle = 'rgba(255,255,255,0.03)';
+
+            const fLeft = g.cx - foamTopHalfWidth + 2*scale;
+            const fRight = g.cx + foamTopHalfWidth - 2*scale;
+
+            // Base foam layer
+            ctx.beginPath();
+            ctx.moveTo(fLeft, beerTop);
+            const segments = 30;
+            const time = Date.now() * 0.001;
+            for (let i = 0; i <= segments; i++) {
+                const t = i / segments;
+                const x = fLeft + (fRight - fLeft) * t;
+                const baseY = beerTop + surfaceTilt * t;
+                // Multiple sine waves for irregular, organic foam edge
+                const wave1 = Math.sin(t * Math.PI * 5 + time * 0.8) * 5 * scale;
+                const wave2 = Math.sin(t * Math.PI * 11 + time * 1.3) * 2.5 * scale;
+                const wave3 = Math.sin(t * Math.PI * 3 + time * 0.5) * 3 * scale;
+                const h = baseY - Math.abs(wave1) - Math.abs(wave2) - Math.abs(wave3) - 2*scale;
+                ctx.lineTo(x, h);
+            }
+            ctx.lineTo(fRight, beerTop);
+            ctx.lineTo(g.cx + beerTopHalfWidth - 4*scale, beerTop);
+            ctx.lineTo(g.cx - beerTopHalfWidth + 4*scale, beerTop);
+            ctx.closePath();
+
+            // Creamy foam gradient
+            const foamGrad = ctx.createLinearGradient(g.cx, beerTop, g.cx, foamTop - 15*scale);
+            foamGrad.addColorStop(0, '#FFF5E1');
+            foamGrad.addColorStop(0.3, '#FFEFD5');
+            foamGrad.addColorStop(0.7, '#FFF8DC');
+            foamGrad.addColorStop(1, '#FFFFFF');
+            ctx.fillStyle = foamGrad;
+            ctx.fill();
+
+            // Foam lacing (streaks on glass walls)
+            ctx.save();
+            ctx.globalAlpha = 0.25;
+            ctx.fillStyle = '#FFF5E1';
+            for (let i = 0; i < 8; i++) {
+                const lx = g.cx - g.tw/2 + (0.15 + i * 0.1) * g.tw;
+                const ly = beerTop + (i % 2 === 0 ? 1 : -1) * (3 + Math.random() * 6) * scale;
+                ctx.beginPath();
+                ctx.ellipse(lx, ly, 2*scale, 6*scale, 0, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // Foam bubbles (large creamy ones)
+            for (let b of state.foamBubbles) {
+                const bx = g.cx - g.tw/2 + b.x * g.tw;
+                const by = beerTop + b.y * g.h;
+                const br = b.r * scale * 0.5;
+                ctx.globalAlpha = b.life * 0.7;
+                ctx.fillStyle = '#FFF';
+                ctx.beginPath();
+                ctx.arc(bx, by, br, 0, Math.PI * 2);
+                ctx.fill();
+                // Bubble specular
+                ctx.globalAlpha = b.life * 0.9;
+                ctx.fillStyle = '#FFFBE8';
+                ctx.beginPath();
+                ctx.arc(bx - br*0.3, by - br*0.3, br*0.4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+
+        function drawGlass(g) {
+            const t = glass.wallThickness * scale;
+
+            // Glass back wall (inner refraction tint)
+            ctx.save();
+            ctx.fillStyle = 'rgba(230, 245, 255, 0.04)';
             drawGlassShape(g, true);
             ctx.fill();
             ctx.restore();
 
-            // Glass front
+            // Outer glass wall stroke
             ctx.save();
-            ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-            ctx.lineWidth = 3 * scale;
+            ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+            ctx.lineWidth = 2.5 * scale;
             ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
             drawGlassShape(g, false);
             ctx.stroke();
+            ctx.restore();
 
-            // Glass shine
+            // Thick inner wall (glass depth)
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 1.5 * scale;
+            const inset = t * 0.55;
             ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-            ctx.lineWidth = 2 * scale;
-            ctx.moveTo(g.cx - g.tw/2 + 15*scale, g.topY + 10*scale);
-            ctx.lineTo(g.cx - g.bw/2 + 15*scale, g.bottomY - 10*scale);
+            ctx.moveTo(g.cx - g.bw/2 + inset, g.bottomY - 4*scale);
+            ctx.lineTo(g.cx - g.tw/2 + inset, g.topY + inset);
+            ctx.lineTo(g.cx + g.tw/2 - inset, g.topY + inset);
+            ctx.lineTo(g.cx + g.bw/2 - inset, g.bottomY - 4*scale);
+            ctx.stroke();
+            ctx.restore();
+
+            // Primary glass shine (curved highlight)
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+            ctx.lineWidth = 2.2 * scale;
+            ctx.lineCap = 'round';
+            ctx.moveTo(g.cx - g.tw/2 + 18*scale, g.topY + 14*scale);
+            ctx.quadraticCurveTo(g.cx - g.bw/2 + 18*scale, g.cy, g.cx - g.bw/2 + 18*scale, g.bottomY - 18*scale);
+            ctx.stroke();
+            ctx.restore();
+
+            // Secondary shine (fainter, on right side)
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1.2 * scale;
+            ctx.lineCap = 'round';
+            ctx.moveTo(g.cx + g.tw/2 - 22*scale, g.topY + 20*scale);
+            ctx.quadraticCurveTo(g.cx + g.bw/2 - 22*scale, g.cy, g.cx + g.bw/2 - 22*scale, g.bottomY - 24*scale);
+            ctx.stroke();
+            ctx.restore();
+
+            // Rim highlight (thick glass lip)
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+            ctx.lineWidth = 2.8 * scale;
+            ctx.lineCap = 'round';
+            ctx.moveTo(g.cx - g.tw/2 + 4*scale, g.topY + 2.5*scale);
+            ctx.lineTo(g.cx + g.tw/2 - 4*scale, g.topY + 2.5*scale);
             ctx.stroke();
 
-            // Rim highlight
+            // Rim inner shadow
             ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-            ctx.lineWidth = 2 * scale;
-            ctx.moveTo(g.cx - g.tw/2 + 5*scale, g.topY + 2*scale);
-            ctx.lineTo(g.cx + g.tw/2 - 5*scale, g.topY + 2*scale);
+            ctx.strokeStyle = 'rgba(180, 210, 230, 0.2)';
+            ctx.lineWidth = 1.2 * scale;
+            ctx.moveTo(g.cx - g.tw/2 + 6*scale, g.topY + 4.5*scale);
+            ctx.lineTo(g.cx + g.tw/2 - 6*scale, g.topY + 4.5*scale);
             ctx.stroke();
+            ctx.restore();
+
+            // === CONDENSATION DROPLETS ===
+            ctx.save();
+            for (let d of state.condensation) {
+                const dx = g.cx + d.xOffset * g.tw * 0.42;
+                const dy = g.topY + d.y * g.h;
+                // Skip if inside the beer area
+                if (dy > g.bottomY - state.fillLevel * g.h - 10*scale) continue;
+
+                ctx.globalAlpha = d.opacity;
+                ctx.fillStyle = 'rgba(220, 240, 255, 0.5)';
+                ctx.beginPath();
+                ctx.arc(dx, dy, d.r * scale, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Droplet highlight
+                ctx.globalAlpha = d.opacity * 1.5;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.beginPath();
+                ctx.arc(dx - d.r*0.25*scale, dy - d.r*0.25*scale, d.r*0.3*scale, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
             ctx.restore();
         }
 
         function drawPourStream(g) {
             if (!state.isPouring || state.fillLevel <= 0.05) return;
-
             const pourX = g.cx + g.tw/2 * Math.sin(state.tiltAngle);
             const pourY = g.topY + 20 * scale;
-
             ctx.save();
-            ctx.strokeStyle = 'rgba(218,165,32,0.6)';
-            ctx.lineWidth = 8 * scale;
+            ctx.strokeStyle = 'rgba(212, 160, 23, 0.55)';
+            ctx.lineWidth = 7 * scale;
             ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(pourX, pourY);
-            ctx.quadraticCurveTo(
-                pourX + 20*scale, pourY + 50*scale,
-                pourX + 10*scale, pourY + 100*scale
-            );
+            ctx.quadraticCurveTo(pourX + 18*scale, pourY + 45*scale, pourX + 8*scale, pourY + 90*scale);
             ctx.stroke();
             ctx.restore();
         }
 
         function drawBackground() {
-            // Dark bar background
+            // Deep bar atmosphere
             const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W,H));
-            grad.addColorStop(0, '#1a0a00');
-            grad.addColorStop(0.5, '#0d0500');
+            grad.addColorStop(0, '#140800');
+            grad.addColorStop(0.4, '#0a0300');
             grad.addColorStop(1, '#000000');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, W, H);
 
-            // Subtle wood texture lines
+            // Soft bokeh orbs for bar atmosphere
             ctx.save();
-            ctx.strokeStyle = 'rgba(139,69,19,0.08)';
+            const orbs = [
+                {x: 0.2, y: 0.3, r: 80, c: 'rgba(212, 160, 23, 0.04)'},
+                {x: 0.8, y: 0.25, r: 100, c: 'rgba(180, 100, 20, 0.03)'},
+                {x: 0.15, y: 0.7, r: 120, c: 'rgba(100, 50, 10, 0.04)'},
+                {x: 0.85, y: 0.75, r: 90, c: 'rgba(212, 160, 23, 0.03)'},
+            ];
+            for (let o of orbs) {
+                const gOrb = ctx.createRadialGradient(o.x*W, o.y*H, 0, o.x*W, o.y*H, o.r*scale);
+                gOrb.addColorStop(0, o.c);
+                gOrb.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = gOrb;
+                ctx.fillRect(0, 0, W, H);
+            }
+            ctx.restore();
+
+            // Subtle wood grain
+            ctx.save();
+            ctx.strokeStyle = 'rgba(100, 50, 15, 0.06)';
             ctx.lineWidth = 1;
-            for (let i = 0; i < H; i += 40) {
+            for (let i = 0; i < H; i += 50) {
                 ctx.beginPath();
                 ctx.moveTo(0, i);
-                ctx.lineTo(W, i + Math.sin(i * 0.01) * 20);
+                ctx.bezierCurveTo(W*0.3, i + Math.sin(i * 0.008) * 15, W*0.7, i + Math.cos(i * 0.012) * 20, W, i + Math.sin(i * 0.005) * 10);
                 ctx.stroke();
             }
             ctx.restore();
         }
 
         function updatePhysics() {
-            // Smooth tilt — heavier, more natural lag like real liquid
             state.tiltAngle += (state.targetTilt - state.tiltAngle) * 0.04;
             state.fbTilt += (state.targetFbTilt - state.fbTilt) * 0.04;
 
-            // Glass wobble physics
             state.glassWobbleVel += -state.glassWobble * 0.1 - state.glassWobbleVel * 0.15;
             state.glassWobble += state.glassWobbleVel;
 
-            // Shake decay
             shakeAccumulator *= 0.95;
 
-            // Foam decay
             state.foamLevel *= 0.9995;
             if (state.foamLevel < 0.001) state.foamLevel = 0;
 
-            // Foam bubbles
             for (let b of state.foamBubbles) {
                 b.x += b.vx;
                 b.y += b.vy;
@@ -639,14 +824,12 @@
             }
             state.foamBubbles = state.foamBubbles.filter(b => b.life > 0.01 && b.r > 0.5);
 
-            // Background bubbles
             for (let b of state.bubbles) {
                 b.y -= b.speed * 0.002;
                 if (b.y < 0) b.y = 1;
                 b.x += Math.sin(Date.now() * 0.001 + b.phase) * 0.001;
             }
 
-            // Pour detection — use front-back tilt (fbTilt) for drinking
             const pourThreshold = 0.35;
             const wasPouring = state.isPouring;
             state.isPouring = state.fbTilt > pourThreshold && state.fillLevel > 0.05;
@@ -655,22 +838,17 @@
                 AudioEngine.playPour();
             }
 
-            // Drink logic
             if (state.isPouring) {
                 const drinkRate = 0.003 * state.fbTilt;
                 state.fillLevel = Math.max(0, state.fillLevel - drinkRate);
-
-                // Foam goes down with beer
                 state.foamLevel = Math.max(0, state.foamLevel - drinkRate * 0.5);
             }
 
-            // Burp at empty
             if (state.fillLevel < 0.05 && !state.burpPlayed && !state.isPouring) {
                 state.burpPlayed = true;
                 AudioEngine.playBurp();
             }
 
-            // Refill animation
             if (state.refillAnim > 0) {
                 state.refillAnim *= 0.95;
                 if (state.refillAnim < 0.01) state.refillAnim = 0;
@@ -679,24 +857,22 @@
 
         function render() {
             updatePhysics();
-
             ctx.clearRect(0, 0, W, H);
             drawBackground();
 
             const g = glass.getPath();
-
-            ctx.save();
-
-            // Apply glass wobble + tilt rotation
             const totalRotation = state.tiltAngle + state.glassWobble;
+            const rotAmt = 0.35;
+
+            // Draw beer (clipped inside glass shape)
+            ctx.save();
             ctx.translate(g.cx, g.cy + g.h/2 - 20*scale);
-            ctx.rotate(totalRotation * 0.35);
+            ctx.rotate(totalRotation * rotAmt);
             ctx.translate(-g.cx, -(g.cy + g.h/2 - 20*scale));
 
-            // Refill flash
             if (state.refillAnim > 0) {
                 ctx.save();
-                ctx.fillStyle = `rgba(255,255,255,${state.refillAnim * 0.3})`;
+                ctx.fillStyle = `rgba(255,255,255,${state.refillAnim * 0.25})`;
                 ctx.fillRect(0, 0, W, H);
                 ctx.restore();
             }
@@ -706,22 +882,23 @@
             drawBeer(g);
             ctx.restore();
 
+            // Draw glass front + condensation + pour stream
             ctx.save();
             ctx.translate(g.cx, g.cy + g.h/2 - 20*scale);
-            ctx.rotate(totalRotation * 0.3);
+            ctx.rotate(totalRotation * rotAmt);
             ctx.translate(-g.cx, -(g.cy + g.h/2 - 20*scale));
 
             drawGlass(g);
             drawPourStream(g);
             ctx.restore();
 
-            // Empty state hint
+            // Empty hint
             if (state.fillLevel < 0.05) {
                 ctx.save();
-                ctx.fillStyle = 'rgba(255,255,255,0.4)';
-                ctx.font = `${16 * scale}px -apple-system, sans-serif`;
+                ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                ctx.font = `${15 * scale}px -apple-system, sans-serif`;
                 ctx.textAlign = 'center';
-                ctx.fillText('Tap to refill', W/2, H/2 + g.h/2 + 40*scale);
+                ctx.fillText('Tap to refill', W/2, H/2 + g.h/2 + 45*scale);
                 ctx.restore();
             }
 
@@ -737,7 +914,6 @@
         startBtn.addEventListener('click', async () => {
             AudioEngine.init();
 
-            // Request motion permission on iOS (devicemotion)
             if (typeof DeviceMotionEvent !== 'undefined' && 
                 typeof DeviceMotionEvent.requestPermission === 'function') {
                 try {
@@ -758,7 +934,6 @@
                 motionEnabled = true;
             }
 
-            // Start calibration: the first 15 accelerometer frames establish "zero"
             calibrating = true;
             calibrateCount = 0;
             calSumNx = calSumNy = calSumNz = 0;
@@ -767,7 +942,6 @@
             refill();
             render();
 
-            // Hide hint after 5 seconds
             setTimeout(() => {
                 hint.style.opacity = '0';
             }, 5000);
@@ -786,12 +960,11 @@
                 alert('Motion access denied. Use touch/mouse to tilt.');
                 motionEnabled = false;
                 overlay.classList.add('hidden');
-                    refill();
-                    render();
+                refill();
+                render();
             }
         });
 
-        // Double-tap to refill
         let lastTap = 0;
         canvas.addEventListener('touchend', (e) => {
             const now = Date.now();
@@ -801,7 +974,6 @@
             lastTap = now;
         });
 
-        // Prevent scroll/zoom
         document.addEventListener('gesturestart', e => e.preventDefault());
         document.addEventListener('gesturechange', e => e.preventDefault());
         document.addEventListener('gestureend', e => e.preventDefault());
