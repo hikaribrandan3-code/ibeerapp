@@ -255,6 +255,14 @@
         let shakeAccumulator = 0;
         let lastX = 0, lastY = 0, lastZ = 0;
 
+        // Calibration: capture the "straight" position on startup to cancel hardware bias
+        let calibrating = false;
+        let calibrateCount = 0;
+        const CALIBRATE_FRAMES = 15;
+        let calSumNx = 0, calSumNy = 0, calSumNz = 0;
+        let zeroTilt = 0;
+        let zeroFbTilt = 0;
+
         // Device Motion — primary input using gravity vector (reliable across iOS/Android)
         window.addEventListener('devicemotion', (e) => {
             if (!motionEnabled) return;
@@ -271,17 +279,34 @@
             const ny = y / g;
             const nz = z / g;
 
+            // Calibration phase: average the first N readings to establish zero
+            if (calibrating) {
+                calSumNx += nx;
+                calSumNy += ny;
+                calSumNz += nz;
+                calibrateCount++;
+                if (calibrateCount >= CALIBRATE_FRAMES) {
+                    const avgNx = calSumNx / CALIBRATE_FRAMES;
+                    const avgNy = calSumNy / CALIBRATE_FRAMES;
+                    const avgNz = calSumNz / CALIBRATE_FRAMES;
+                    zeroTilt = Math.atan2(avgNx, avgNy);
+                    zeroFbTilt = Math.atan2(avgNz, avgNy);
+                    calibrating = false;
+                }
+                return;
+            }
+
             // Left-right tilt: angle of gravity projected onto the device's x-y plane.
             // When phone is upright: nx≈0, ny≈1  → atan2(0,1) = 0
             // When tilted right:    nx≈1, ny≈0  → atan2(1,0) = +π/2
             // When tilted left:     nx≈-1, ny≈0 → atan2(-1,0) = -π/2
-            state.targetTilt = Math.atan2(nx, ny);
+            state.targetTilt = (Math.atan2(nx, ny) - zeroTilt) * 0.82;
 
             // Front-back tilt: angle from vertical in the y-z plane.
             // When upright:         nz≈0, ny≈1  → atan2(0,1) = 0
             // When tilted back:     nz≈1, ny≈0  → atan2(1,0) = +π/2  (drinking)
             // When tilted forward:  nz≈-1, ny≈0 → atan2(-1,0) = -π/2
-            state.targetFbTilt = Math.atan2(nz, ny);
+            state.targetFbTilt = (Math.atan2(nz, ny) - zeroFbTilt) * 0.82;
 
             // Shake detection
             const delta = Math.abs(x - lastX) + Math.abs(y - lastY) + Math.abs(z - lastZ);
@@ -417,7 +442,8 @@
             ctx.lineTo(g.cx - beerTopHalfWidth + 4*scale, beerTop);
 
             // Surface stays level with gravity (counter-tilts relative to glass)
-            const surfaceTilt = -state.tiltAngle * 35 * scale;
+            // Factor computed from glass geometry: width ~132px * rotation 0.35 ≈ 46
+            const surfaceTilt = -state.tiltAngle * 48 * scale;
             ctx.lineTo(g.cx + beerTopHalfWidth - 4*scale, beerTop + surfaceTilt);
 
             // Right side
@@ -718,6 +744,11 @@
             } else {
                 motionEnabled = true;
             }
+
+            // Start calibration: the first 15 accelerometer frames establish "zero"
+            calibrating = true;
+            calibrateCount = 0;
+            calSumNx = calSumNy = calSumNz = 0;
 
             overlay.classList.add('hidden');
             refill();
