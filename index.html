@@ -199,8 +199,10 @@
         // === PHYSICS STATE ===
         const state = {
             fillLevel: 1.0,        // 0 to 1
-            tiltAngle: 0,          // radians
+            tiltAngle: 0,          // radians — left/right tilt for visual
             targetTilt: 0,
+            fbTilt: 0,             // radians — front/back tilt for drinking
+            targetFbTilt: 0,
             foamLevel: 0,          // 0 to 0.3 (extra foam on top)
             foamBubbles: [],
             isPouring: false,
@@ -253,30 +255,7 @@
         let shakeAccumulator = 0;
         let lastX = 0, lastY = 0, lastZ = 0;
 
-        // Device Orientation (tilt)
-        window.addEventListener('deviceorientation', (e) => {
-            if (!motionEnabled) return;
-            // beta: front-back tilt (-180 to 180) — this is the drinking motion
-            // gamma: left-right tilt (-90 to 90)
-            const beta = e.beta || 0;
-            const gamma = e.gamma || 0;
-
-            // Deadzone: holding the phone steady shouldn't tilt the beer
-            let rawBeta = beta;
-            if (Math.abs(rawBeta) < 10) rawBeta = 0;
-            else rawBeta = Math.sign(rawBeta) * (Math.abs(rawBeta) - 10);
-
-            // Minimal gamma influence — real beer doesn't slosh sideways much
-            let rawGamma = gamma * 0.1;
-            if (Math.abs(rawGamma) < 5) rawGamma = 0;
-
-            state.targetTilt = (rawBeta * 0.9 + rawGamma) * Math.PI / 180;
-
-            // Clamp
-            state.targetTilt = Math.max(-1.2, Math.min(1.2, state.targetTilt));
-        });
-
-        // Device Motion (shake detection)
+        // Device Motion — primary input using gravity vector (reliable across iOS/Android)
         window.addEventListener('devicemotion', (e) => {
             if (!motionEnabled) return;
             const acc = e.accelerationIncludingGravity;
@@ -286,12 +265,29 @@
             const y = acc.y || 0;
             const z = acc.z || 0;
 
+            // Normalize gravity vector to unit length
+            const g = Math.sqrt(x*x + y*y + z*z) || 9.8;
+            const nx = x / g;
+            const ny = y / g;
+            const nz = z / g;
+
+            // Left-right tilt: angle of gravity projected onto the device's x-y plane.
+            // When phone is upright: nx≈0, ny≈1  → atan2(0,1) = 0
+            // When tilted right:    nx≈1, ny≈0  → atan2(1,0) = +π/2
+            // When tilted left:     nx≈-1, ny≈0 → atan2(-1,0) = -π/2
+            state.targetTilt = Math.atan2(nx, ny);
+
+            // Front-back tilt: angle from vertical in the y-z plane.
+            // When upright:         nz≈0, ny≈1  → atan2(0,1) = 0
+            // When tilted back:     nz≈1, ny≈0  → atan2(1,0) = +π/2  (drinking)
+            // When tilted forward:  nz≈-1, ny≈0 → atan2(-1,0) = -π/2
+            state.targetFbTilt = Math.atan2(nz, ny);
+
+            // Shake detection
             const delta = Math.abs(x - lastX) + Math.abs(y - lastY) + Math.abs(z - lastZ);
             shakeAccumulator = shakeAccumulator * 0.8 + delta * 0.2;
-
             lastX = x; lastY = y; lastZ = z;
 
-            // Shake threshold
             if (shakeAccumulator > 25 && Date.now() - state.lastShakeTime > 800) {
                 state.lastShakeTime = Date.now();
                 triggerFoam();
@@ -582,6 +578,7 @@
         function updatePhysics() {
             // Smooth tilt — heavier, more natural lag like real liquid
             state.tiltAngle += (state.targetTilt - state.tiltAngle) * 0.04;
+            state.fbTilt += (state.targetFbTilt - state.fbTilt) * 0.04;
 
             // Glass wobble physics
             state.glassWobbleVel += -state.glassWobble * 0.1 - state.glassWobbleVel * 0.15;
@@ -610,10 +607,10 @@
                 b.x += Math.sin(Date.now() * 0.001 + b.phase) * 0.001;
             }
 
-            // Pour detection
-            const pourThreshold = 0.3;
+            // Pour detection — use front-back tilt (fbTilt) for drinking
+            const pourThreshold = 0.35;
             const wasPouring = state.isPouring;
-            state.isPouring = Math.abs(state.tiltAngle) > pourThreshold && state.fillLevel > 0.05;
+            state.isPouring = state.fbTilt > pourThreshold && state.fillLevel > 0.05;
 
             if (state.isPouring && !wasPouring) {
                 AudioEngine.playPour();
@@ -621,7 +618,7 @@
 
             // Drink logic
             if (state.isPouring) {
-                const drinkRate = 0.003 * Math.abs(state.tiltAngle);
+                const drinkRate = 0.003 * state.fbTilt;
                 state.fillLevel = Math.max(0, state.fillLevel - drinkRate);
 
                 // Foam goes down with beer
@@ -701,11 +698,11 @@
         startBtn.addEventListener('click', async () => {
             AudioEngine.init();
 
-            // Request motion permission on iOS
-            if (typeof DeviceOrientationEvent !== 'undefined' && 
-                typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // Request motion permission on iOS (devicemotion)
+            if (typeof DeviceMotionEvent !== 'undefined' && 
+                typeof DeviceMotionEvent.requestPermission === 'function') {
                 try {
-                    const permission = await DeviceOrientationEvent.requestPermission();
+                    const permission = await DeviceMotionEvent.requestPermission();
                     if (permission === 'granted') {
                         motionEnabled = true;
                     } else {
@@ -734,7 +731,7 @@
 
         permissionBtn.addEventListener('click', async () => {
             try {
-                const permission = await DeviceOrientationEvent.requestPermission();
+                const permission = await DeviceMotionEvent.requestPermission();
                 if (permission === 'granted') {
                     motionEnabled = true;
                     overlay.classList.add('hidden');
@@ -745,8 +742,8 @@
                 alert('Motion access denied. Use touch/mouse to tilt.');
                 motionEnabled = false;
                 overlay.classList.add('hidden');
-                refill();
-                render();
+                    refill();
+                    render();
             }
         });
 
